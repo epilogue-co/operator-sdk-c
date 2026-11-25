@@ -124,6 +124,8 @@ if(OPSDK_INSTALL)
   if(OPSDK_HAVE_LIBM)
     set(OPSDK_PC_LIBS_PRIVATE "-lm")
   endif()
+  file(RELATIVE_PATH OPSDK_PC_TO_PREFIX "/${CMAKE_INSTALL_LIBDIR}/pkgconfig" "/")
+  string(REGEX REPLACE "/$" "" OPSDK_PC_TO_PREFIX "${OPSDK_PC_TO_PREFIX}")
   configure_file(cmake/opsdk.pc.in ${PROJECT_BINARY_DIR}/opsdk.pc @ONLY)
   install(FILES ${PROJECT_BINARY_DIR}/opsdk.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
