@@ -1,0 +1,8 @@
+foreach(name identify backup_save restore_save)
+  add_executable(${name} ${name}.c)
+  target_link_libraries(${name} PRIVATE opsdk::opsdk)
+  target_compile_definitions(${name} PRIVATE ${OPSDK_PROGRAM_DEFINITIONS})
+  target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/tools)
+  set_target_properties(${name} PROPERTIES C_STANDARD 99 C_EXTENSIONS OFF)
+  target_compile_options(${name} PRIVATE ${OPSDK_WARNING_FLAGS})
+endforeach()
