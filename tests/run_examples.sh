@@ -16,7 +16,7 @@ port=$(cat "$work/port")
 
 out=$("$examples/identify" "$port")
 echo "$out"
-echo "$out" | grep -q "Operator SIMULATED0001, firmware 10.0.0"
+echo "$out" | grep -q "Operator SIMULATED0001, firmware 10.1.0"
 echo "$out" | grep -q "Game Boy / Color, game 65536 B, save 8192 B"
 
 "$examples/backup_save" "$work/game.sav" "$port"

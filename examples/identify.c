@@ -50,7 +50,8 @@ int main(int argc, char **argv) {
     printf("No readable cartridge. Insert one or reseat it.\n");
   } else {
     printf("%s, game %u B, save %u B\n", platform_name(cart.platform), cart.rom_size, cart.save_size);
-    if (cart.counterfeit) printf("  Writes are refused on this cartridge (counterfeit).\n");
+    if (cart.flashcart || cart.counterfeit)
+      printf("  Writes are refused on this cartridge (flashcart or counterfeit).\n");
   }
   rc = OPSDK_OK;
   goto done;

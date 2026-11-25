@@ -56,6 +56,14 @@ int main(int argc, char **argv) {
     rc = OPSDK_E_PROTOCOL;
     goto done;
   }
+  opsdk_cart_t after;
+  rc = opsdk_cart_status(dev, &after);
+  if (rc != OPSDK_OK) goto fail;
+  if (!after.logo_valid || !opsdk_same_cartridge(&cart, &after)) {
+    fprintf(stderr, "The cartridge changed during the read. Reseat it and try again.\n");
+    rc = OPSDK_E_PROTOCOL;
+    goto done;
+  }
 
   FILE *f = portable_create_new(argv[1]);
   if (!f) {

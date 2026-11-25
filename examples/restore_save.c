@@ -54,6 +54,8 @@ int main(int argc, char **argv) {
   }
   bool session = false;
   const char *why = NULL;
+  uint8_t *check = NULL;
+  uint32_t crc = 0;
 
   opsdk_info_t info;
   if ((rc = opsdk_get_info(dev, &info)) != OPSDK_OK) goto fail;
@@ -61,10 +63,13 @@ int main(int argc, char **argv) {
     why = "this firmware cannot write saves";
     goto stop;
   }
-  opsdk_cart_t cart, now;
-  if ((rc = opsdk_session_begin(dev, &cart)) != OPSDK_OK) goto fail;
-  session = true;
-  if (cart.counterfeit) {
+  opsdk_cart_t cart, held, now;
+  if ((rc = opsdk_cart_status(dev, &cart)) != OPSDK_OK) goto fail;
+  if (!cart.logo_valid) {
+    why = "no readable cartridge, insert one or reseat it";
+    goto stop;
+  }
+  if (cart.flashcart || cart.counterfeit) {
     why = "writes are refused on this cartridge";
     goto stop;
   }
@@ -74,14 +79,15 @@ int main(int argc, char **argv) {
   }
 
   current = malloc(cart.save_size);
-  uint32_t crc = 0;
-  if (!current) {
+  check = malloc(cart.save_size);
+  if (!current || !check) {
     rc = OPSDK_E_NO_MEMORY;
     goto fail;
   }
   if ((rc = opsdk_save_read(dev, &cart, 0, cart.save_size, current)) != OPSDK_OK) goto fail;
   if ((rc = opsdk_save_crc32(dev, &cart, 0, cart.save_size, &crc)) != OPSDK_OK) goto fail;
-  if (crc != opsdk_crc32(0, current, cart.save_size)) {
+  if ((rc = opsdk_cart_status(dev, &now)) != OPSDK_OK) goto fail;
+  if (crc != opsdk_crc32(0, current, cart.save_size) || !now.logo_valid || !opsdk_same_cartridge(&cart, &now)) {
     why = "backup read did not verify, nothing written";
     goto stop;
   }
@@ -99,28 +105,38 @@ int main(int argc, char **argv) {
     goto stop;
   }
 
-  if ((rc = opsdk_cart_status(dev, &now)) != OPSDK_OK) goto fail;
-  if (!opsdk_same_cartridge(&cart, &now)) {
-    why = "cartridge changed, nothing written";
+  if ((rc = opsdk_session_begin(dev, &held)) != OPSDK_OK) goto fail;
+  session = true;
+  if (!held.logo_valid || !opsdk_same_cartridge(&cart, &held)) goto changed;
+  if ((rc = opsdk_save_read(dev, &held, 0, held.save_size, check)) != OPSDK_OK) goto fail;
+  if (memcmp(check, current, held.save_size) != 0) {
+    why = "the save no longer matches the backup, nothing written";
     goto stop;
   }
+  if ((rc = opsdk_cart_status(dev, &now)) != OPSDK_OK) goto fail;
+  if (!now.logo_valid || !opsdk_same_cartridge(&cart, &now)) goto changed;
 
-  rc = opsdk_save_write(dev, &cart, data, (uint32_t)size, show_progress, NULL);
+  rc = opsdk_save_write(dev, &held, data, (uint32_t)size, show_progress, NULL);
   fputc('\n', stderr);
   if (rc != OPSDK_OK) {
     fprintf(stderr, "The write failed (%s). The save may be partly written.\n", opsdk_strerror(rc));
     fprintf(stderr, "Recover by restoring %s once the cartridge is reseated.\n", argv[2]);
     goto done;
   }
-  if ((rc = opsdk_save_crc32(dev, &cart, 0, cart.save_size, &crc)) != OPSDK_OK) goto fail;
-  if (crc != opsdk_crc32(0, data, (size_t)size)) {
+  rc = opsdk_save_read(dev, &held, 0, held.save_size, check);
+  if (rc == OPSDK_OK) rc = opsdk_cart_status(dev, &now);
+  if (rc != OPSDK_OK) fprintf(stderr, "Operator error: %s (%d)\n", opsdk_strerror(rc), rc);
+  if (rc != OPSDK_OK || !now.logo_valid || !opsdk_same_cartridge(&cart, &now) ||
+      memcmp(check, data, (size_t)size) != 0) {
     fprintf(stderr, "Verification failed. Restore %s.\n", argv[2]);
-    rc = OPSDK_E_PROTOCOL;
+    if (rc == OPSDK_OK) rc = OPSDK_E_PROTOCOL;
     goto done;
   }
   printf("Save written and verified.\n");
   goto done;
 
+changed:
+  why = "cartridge changed, nothing written";
 stop:
   fprintf(stderr, "%s\n", why);
   rc = OPSDK_E_ARGUMENT;
@@ -128,8 +144,15 @@ stop:
 fail:
   fprintf(stderr, "Operator error: %s (%d)\n", opsdk_strerror(rc), rc);
 done:
-  if (session) opsdk_session_end(dev);
+  if (session) {
+    int end_rc = opsdk_session_end(dev);
+    if (rc == OPSDK_OK && end_rc != OPSDK_OK) {
+      fprintf(stderr, "The session did not end cleanly: %s (%d)\n", opsdk_strerror(end_rc), end_rc);
+      rc = end_rc;
+    }
+  }
   opsdk_close(dev);
+  free(check);
   free(current);
   free(data);
   return rc == OPSDK_OK ? 0 : 1;

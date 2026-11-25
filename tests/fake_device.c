@@ -123,6 +123,7 @@ static void command(fake_device_t *f, const uint8_t *cmd) {
     pkt[6] = 2;
     pkt[7] = 1;
     pkt[8] = 10;
+    pkt[9] = 1;
     pkt[0x0E] = 0x37;
     pkt[0x0F] = 0x03;
     pkt[0x10] = 0x1E;

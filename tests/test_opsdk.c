@@ -79,6 +79,10 @@ static void test_signature(void) {
   raw[0x07] = 0x24;
   opsdk_parse_signature(raw, &c);
   CHECK(c.save_size == 98304);
+  raw[0x05] = 31;
+  raw[0x0A] = (uint8_t)(29 << 2 | 1);
+  opsdk_parse_signature(raw, &c);
+  CHECK(c.rom_size == 1u << 31);
 }
 
 static void test_camera_defaults(void) {
